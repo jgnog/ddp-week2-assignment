@@ -1,0 +1,85 @@
+---
+title: "Developing Data Products - Week 2 Assignment"
+author: "Gonçalo Nogueira"
+date: "September 14, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(leaflet)
+library(geojsonio)
+library(dplyr)
+```
+
+The following map shows the percentage of alcohol that is consumed via wine in each country on a per
+capita basis. The data is from 2010 and was published by the World Health Organization in
+2014.
+
+```{r}
+alcohol.consumption <- read.csv("alcoholconsumptiondata.csv", header = FALSE, stringsAsFactors = FALSE,
+                                col.names = c("rank",
+                                              "country",
+                                              "total",
+                                              "recorded.consumption",
+                                              "unrecorded.consumption",
+                                              "beer",
+                                              "wine",
+                                              "spirits",
+                                              "other",
+                                              "projection.2015"))
+# Remove the leading space in the country variable
+# For some reason trimws() didn't work so I used this workaround
+alcohol.consumption$country <- sapply(alcohol.consumption$country, substr, 2, 1000)
+
+countries <- geojsonio::geojson_read("countries.geo.json", what = "sp")
+
+assign.wine.consumption <- function(country.name) {
+  x <- filter(alcohol.consumption, country == country.name)$wine
+  if (identical(x, numeric(0))) {
+    return(NA)
+  } else {
+    return(x)
+  }
+}
+
+alcohol.consumption[alcohol.consumption$country == "United States", ]$country <- "United States of America"
+countries$wine <- sapply(countries$name, assign.wine.consumption)
+ 
+
+bins <- c(0, 5, 10, 20, 40, 60, 100)
+pal <- colorBin("YlOrRd", domain = countries$wine, bins = bins)
+labels <- sprintf(
+  "<strong>%s</strong><br/>%g%% of alcohol consumed as wine",
+  countries$name, countries$wine
+) %>% lapply(htmltools::HTML)
+  
+
+leaflet(countries) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~pal(wine),
+    weight = 2,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlight = highlightOptions(
+      weight = 5,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labels,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto")
+  ) %>%
+  addLegend(pal = pal,
+            values = ~wine,
+            opacity = 0.7,
+            title = "% of alcohol consumed via wine",
+            position = "bottomright")
+```
+
